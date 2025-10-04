@@ -60,20 +60,51 @@ class GitHubRepositoryIdentifier:
     - Recent commits and changes
     """
     
-    def __init__(self, github_token: Optional[str] = None):
-        self.github_token = github_token or os.getenv("GITHUB_TOKEN")
+    def __init__(self, github_token: Optional[str] = None, datadog_api_key: Optional[str] = None, datadog_app_key: Optional[str] = None):
+        # Try to load from config file first
+        try:
+            import sys
+            import os
+            sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
+            from config import GITHUB_TOKEN as CONFIG_GITHUB_TOKEN, DATADOG_API_KEY as CONFIG_DATADOG_API_KEY, DATADOG_APP_KEY as CONFIG_DATADOG_APP_KEY
+            
+            self.github_token = github_token or CONFIG_GITHUB_TOKEN or os.getenv("GITHUB_TOKEN")
+            self.datadog_api_key = datadog_api_key or CONFIG_DATADOG_API_KEY or os.getenv("DATADOG_API_KEY")
+            self.datadog_app_key = datadog_app_key or CONFIG_DATADOG_APP_KEY or os.getenv("DATADOG_APP_KEY")
+        except ImportError:
+            # Fallback to environment variables
+            self.github_token = github_token or os.getenv("GITHUB_TOKEN")
+            self.datadog_api_key = datadog_api_key or os.getenv("DATADOG_API_KEY")
+            self.datadog_app_key = datadog_app_key or os.getenv("DATADOG_APP_KEY")
         self.session = requests.Session()
         
-        if self.github_token:
+        if self.github_token and self.github_token != "your_github_token_here":
             self.session.headers.update({
                 "Authorization": f"token {self.github_token}",
                 "Accept": "application/vnd.github.v3+json"
             })
+            logger.info("GitHub token loaded successfully")
         else:
             self.session.headers.update({
                 "Accept": "application/vnd.github.v3+json"
             })
-            logger.warning("No GitHub token provided. Rate limits may apply.")
+            logger.warning("No valid GitHub token provided. Rate limits may apply.")
+        
+        # Initialize Datadog if keys are provided
+        if self.datadog_api_key and self.datadog_app_key and self.datadog_api_key != "your_datadog_api_key_here":
+            try:
+                from datadog import initialize
+                initialize(
+                    api_key=self.datadog_api_key,
+                    app_key=self.datadog_app_key
+                )
+                logger.info("Datadog integration initialized successfully")
+            except ImportError:
+                logger.warning("Datadog package not installed. Install with: pip install datadog")
+            except Exception as e:
+                logger.warning(f"Failed to initialize Datadog: {e}")
+        else:
+            logger.info("No valid Datadog credentials provided. Skipping Datadog integration.")
     
     def identify_issues_and_flags(self, repo_url: str) -> Dict[str, Any]:
         """
@@ -93,29 +124,35 @@ class GitHubRepositoryIdentifier:
             issues = []
             flags = []
             
-            # 1. Analyze GitHub Issues
-            github_issues = self._analyze_github_issues(owner, repo)
-            issues.extend(github_issues)
+            # Determine analysis strategy based on rate limits
+            has_token = self.github_token and self.github_token != "your_github_token_here"
             
-            # 2. Analyze GitHub Actions Workflows
-            workflow_flags = self._analyze_workflows(owner, repo)
-            flags.extend(workflow_flags)
-            
-            # 3. Analyze Dependencies
-            dependency_issues = self._analyze_dependencies(owner, repo)
-            issues.extend(dependency_issues)
-            
-            # 4. Analyze Recent Commits
-            commit_flags = self._analyze_recent_commits(owner, repo)
-            flags.extend(commit_flags)
-            
-            # 5. Analyze Code Quality (if possible)
-            quality_issues = self._analyze_code_quality(owner, repo)
-            issues.extend(quality_issues)
-            
-            # 6. Analyze Security (if possible)
-            security_issues = self._analyze_security(owner, repo)
-            issues.extend(security_issues)
+            if has_token:
+                logger.info("GitHub token detected - running full analysis")
+                # Full analysis with token (5,000 requests/hour)
+                github_issues = self._analyze_github_issues(owner, repo)
+                issues.extend(github_issues)
+                
+                workflow_flags = self._analyze_workflows(owner, repo)
+                flags.extend(workflow_flags)
+                
+                dependency_issues = self._analyze_dependencies(owner, repo)
+                issues.extend(dependency_issues)
+                
+                commit_flags = self._analyze_recent_commits(owner, repo)
+                flags.extend(commit_flags)
+                
+                quality_issues = self._analyze_code_quality(owner, repo)
+                issues.extend(quality_issues)
+                
+                security_issues = self._analyze_security(owner, repo)
+                issues.extend(security_issues)
+            else:
+                logger.info("No GitHub token - running limited analysis (max 1 request)")
+                # Limited analysis without token (1 request only)
+                # Only analyze dependencies (no API calls needed)
+                dependency_issues = self._analyze_dependencies(owner, repo)
+                issues.extend(dependency_issues)
             
             # Generate summary
             summary = self._generate_summary(owner, repo, issues, flags)
@@ -271,8 +308,14 @@ class GitHubRepositoryIdentifier:
         flags = []
         
         try:
-            # Get recent commits
+            # Get recent commits with rate limiting
             response = self.session.get(f"https://api.github.com/repos/{owner}/{repo}/commits")
+            
+            # Handle rate limiting
+            if response.status_code == 403 and "rate limit exceeded" in response.text.lower():
+                logger.warning("GitHub rate limit exceeded. Skipping commit analysis.")
+                return flags
+            
             response.raise_for_status()
             commits = response.json()
             
@@ -306,8 +349,14 @@ class GitHubRepositoryIdentifier:
         issues = []
         
         try:
-            # Get repository information
+            # Get repository information with rate limiting
             response = self.session.get(f"https://api.github.com/repos/{owner}/{repo}")
+            
+            # Handle rate limiting
+            if response.status_code == 403 and "rate limit exceeded" in response.text.lower():
+                logger.warning("GitHub rate limit exceeded. Skipping code quality analysis.")
+                return issues
+            
             response.raise_for_status()
             repo_data = response.json()
             

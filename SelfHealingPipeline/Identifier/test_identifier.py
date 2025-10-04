@@ -6,7 +6,7 @@ Demonstrates how to use the identifier to analyze public GitHub repositories.
 
 import sys
 import json
-from Identifier.identifierAdapter import GitHubRepositoryIdentifier, identify_issues
+from identifierAdapter import GitHubRepositoryIdentifier, identify_issues
 
 def test_identifier(repo_url: str, output_format: str = "pretty"):
     """
