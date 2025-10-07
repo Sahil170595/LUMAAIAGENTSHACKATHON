@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 """
-Test script for Identifier
+Test script for the GitHub Repository Identifier
 Demonstrates how to use the identifier to analyze public GitHub repositories.
 """
 
