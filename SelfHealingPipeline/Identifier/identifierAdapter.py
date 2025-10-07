@@ -157,8 +157,7 @@ class GitHubRepositoryIdentifier:
             # Generate summary
             summary = self._generate_summary(owner, repo, issues, flags)
             
-            # Prepare result
-            result = {
+            return {
                 "repository": f"{owner}/{repo}",
                 "analysis_timestamp": datetime.now().isoformat(),
                 "summary": summary,
@@ -167,17 +166,6 @@ class GitHubRepositoryIdentifier:
                 "total_issues": len(issues),
                 "total_flags": len(flags)
             }
-            
-            # Send to Datadog dashboard if configured
-            if self.datadog_api_key and self.datadog_app_key and self.datadog_api_key != "your_datadog_api_key_here":
-                try:
-                    # Send metrics directly to Datadog
-                    self._send_metrics_to_datadog(result, f"{owner}/{repo}")
-                    logger.info("Analysis data sent to Datadog dashboard")
-                except Exception as e:
-                    logger.warning(f"Failed to send to Datadog dashboard: {e}")
-            
-            return result
             
         except Exception as e:
             logger.error(f"Failed to analyze repository {repo_url}: {str(e)}")
@@ -491,76 +479,6 @@ class GitHubRepositoryIdentifier:
             recommendations.append("Repository appears healthy with no critical issues")
         
         return recommendations
-    
-    def _send_metrics_to_datadog(self, result: Dict, repository: str):
-        """Send metrics directly to Datadog API."""
-        try:
-            import requests
-            
-            # Prepare metrics data
-            timestamp = int(time.time())
-            total_issues = result.get('total_issues', 0)
-            total_flags = result.get('total_flags', 0)
-            
-            # Calculate health score
-            health_score = 100 - (total_issues * 5) - (total_flags * 3)
-            health_score = max(health_score, 0)
-            
-            # Prepare metrics
-            metrics_data = {
-                "series": [
-                    {
-                        "metric": "self_healing.repository.health_score",
-                        "points": [[timestamp, health_score]],
-                        "tags": [f"repo:{repository}"],
-                        "type": "gauge"
-                    },
-                    {
-                        "metric": "self_healing.repository.issues_count",
-                        "points": [[timestamp, total_issues]],
-                        "tags": [f"repo:{repository}"],
-                        "type": "gauge"
-                    },
-                    {
-                        "metric": "self_healing.repository.flags_count",
-                        "points": [[timestamp, total_flags]],
-                        "tags": [f"repo:{repository}"],
-                        "type": "gauge"
-                    }
-                ]
-            }
-            
-            # Add severity breakdown if available
-            if result.get('summary'):
-                summary = result['summary']
-                severity_breakdown = summary.get('severity_breakdown', {})
-                
-                for severity, count in severity_breakdown.items():
-                    if count > 0:
-                        metrics_data["series"].append({
-                            "metric": f"self_healing.repository.{severity}_issues",
-                            "points": [[timestamp, count]],
-                            "tags": [f"repo:{repository}", f"severity:{severity}"],
-                            "type": "gauge"
-                        })
-            
-            # Send to Datadog API
-            url = "https://api.datadoghq.com/api/v1/series"
-            headers = {
-                "Content-Type": "application/json",
-                "DD-API-KEY": self.datadog_api_key,
-                "DD-APPLICATION-KEY": self.datadog_app_key
-            }
-            
-            response = requests.post(url, headers=headers, json=metrics_data)
-            
-            if response.status_code == 202:
-                logger.info(f"Metrics sent to Datadog: {total_issues} issues, {total_flags} flags, health: {health_score}")
-            else:
-                logger.warning(f"Failed to send metrics: {response.status_code}")
-                
-        except Exception as e:
-            logger.error(f"Error sending metrics to Datadog: {e}")
 
 # Convenience function for backward compatibility
 def identify_issues(repo_url: str) -> Dict[str, Any]:

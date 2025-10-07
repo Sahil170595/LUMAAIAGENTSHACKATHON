@@ -1,29 +1,19 @@
-# Self-Healing Pipeline
+# Self-Healing Pipeline - GitHub Repository Identifier
 
-A comprehensive self-healing application that analyzes GitHub repositories, identifies issues and flags, and integrates with Datadog for monitoring and visualization.
+A comprehensive tool for analyzing public GitHub repositories to identify issues, flags, and potential problems that could benefit from automated healing.
 
-## 🚀 Features
+## Features
 
-- **GitHub Repository Analysis**: Identifies issues, flags, and potential problems
-- **Datadog Integration**: Sends metrics and events to Datadog dashboard
-- **Rate-Limited Analysis**: Works within GitHub's API limits
-- **Real-time Monitoring**: Live dashboard with health scores and metrics
+The identifier analyzes repositories for:
 
-## 📁 Project Structure
+- **GitHub Issues**: Open issues with severity classification
+- **GitHub Actions**: Failed or cancelled workflow runs
+- **Dependencies**: Dependency management files and potential issues
+- **Code Quality**: Repository size, documentation, and quality metrics
+- **Security**: Security vulnerabilities and alerts (with GitHub token)
+- **Recent Activity**: Commit patterns that suggest ongoing issues
 
-```
-SelfHealingPipeline/
-├── config.py                    # Configuration file
-├── requirements.txt             # Python dependencies
-├── README.md                   # This file
-├── Identifier/
-│   ├── identifierAdapter.py    # Main identifier component
-│   └── test_identifier.py     # Test script
-├── Executioner/               # Sandbox testing (future)
-└── Rectifier/                 # Production fixes (future)
-```
-
-## 🛠️ Quick Start
+## Quick Start
 
 ### 1. Install Dependencies
 
@@ -31,70 +21,47 @@ SelfHealingPipeline/
 pip install -r requirements.txt
 ```
 
-### 2. Configure API Keys
-
-Edit `config.py` with your API keys:
+### 2. Basic Usage
 
 ```python
-# GitHub API Configuration
-GITHUB_TOKEN = "your_github_token_here"  # Optional
+from Identifier.identifierAdapter import identify_issues
 
-# Datadog API Configuration  
-DATADOG_API_KEY = "your_datadog_api_key_here"
-DATADOG_APP_KEY = "your_datadog_app_key_here"
+# Analyze a repository
+result = identify_issues("https://github.com/microsoft/vscode")
+print(f"Found {result['total_issues']} issues and {result['total_flags']} flags")
 ```
 
-### 3. Run Analysis
+### 3. Command Line Usage
 
 ```bash
 # Basic analysis
-python Identifier/test_identifier.py https://github.com/owner/repo
+python Identifier/identifierAdapter.py https://github.com/facebook/react
 
-# Different output formats
-python Identifier/test_identifier.py https://github.com/owner/repo json
-python Identifier/test_identifier.py https://github.com/owner/repo summary
+# Using the test script with different output formats
+python test_identifier.py https://github.com/microsoft/vscode
+python test_identifier.py https://github.com/torvalds/linux json
+python test_identifier.py https://github.com/facebook/react summary
 ```
 
-## 📊 Datadog Dashboard
+## Output Format
 
-The identifier automatically sends data to your Datadog dashboard:
-
-- **Repository Health Score**: 0-100 health rating
-- **Total Issues**: Number of identified issues
-- **Total Flags**: Number of monitoring flags
-- **Severity Breakdown**: High/Medium/Low issue counts
-
-### Dashboard URL
-Your dashboard is available at: `https://app.datadoghq.com/dashboard/zk8-v5f-ga8/self-healing-analysis---sahil170595banterblogs`
-
-## 🔧 Configuration
-
-### GitHub Token (Optional)
-- **Without Token**: 60 requests/hour (rate limited)
-- **With Token**: 5,000 requests/hour + security alerts
-- **Get Token**: https://github.com/settings/tokens
-
-### Datadog Keys (Required)
-- **API Key**: https://app.datadoghq.com/organization-settings/api-keys
-- **App Key**: https://app.datadoghq.com/organization-settings/application-keys
-
-## 📈 Output Format
+The identifier returns a comprehensive analysis including:
 
 ```json
 {
   "repository": "owner/repo",
   "analysis_timestamp": "2024-01-01T12:00:00",
   "summary": {
-    "total_issues": 3,
-    "total_flags": 1,
+    "total_issues": 5,
+    "total_flags": 2,
     "severity_breakdown": {
-      "high": 0,
-      "medium": 2,
+      "high": 1,
+      "medium": 3,
       "low": 1
     },
     "recommendations": [
-      "Address medium-severity issues",
-      "Repository appears healthy overall"
+      "Address high-severity issues immediately",
+      "Fix failing GitHub Actions workflows"
     ]
   },
   "issues": [...],
@@ -102,9 +69,59 @@ Your dashboard is available at: `https://app.datadoghq.com/dashboard/zk8-v5f-ga8
 }
 ```
 
-## 🎯 Usage Examples
+## Issue Types
 
-### Python Integration
+- **github_issue**: Open GitHub issues
+- **dependency_analysis**: Dependency management files found
+- **code_quality**: Code quality concerns (large repos, missing docs)
+- **security_vulnerability**: Security alerts and vulnerabilities
+- **documentation**: Missing or inadequate documentation
+
+## Flag Types
+
+- **workflow_failure**: Failed GitHub Actions workflows
+- **workflow_cancelled**: Cancelled GitHub Actions workflows
+- **commit_pattern**: Recent commits suggesting bug fixes
+- **security_alert**: Security-related flags
+
+## Severity Levels
+
+- **high**: Critical issues requiring immediate attention
+- **medium**: Important issues that should be addressed
+- **low**: Minor issues or suggestions
+- **info**: Informational findings
+
+## GitHub Token (Optional)
+
+For enhanced analysis including security alerts and higher rate limits:
+
+```bash
+export GITHUB_TOKEN=your_github_token_here
+```
+
+## Examples
+
+### Analyze a Popular Repository
+
+```bash
+python test_identifier.py https://github.com/microsoft/vscode
+```
+
+### Get JSON Output
+
+```bash
+python test_identifier.py https://github.com/facebook/react json
+```
+
+### Quick Summary
+
+```bash
+python test_identifier.py https://github.com/torvalds/linux summary
+```
+
+## Integration
+
+The identifier is designed to be integrated into larger self-healing pipelines:
 
 ```python
 from Identifier.identifierAdapter import GitHubRepositoryIdentifier
@@ -116,46 +133,26 @@ identifier = GitHubRepositoryIdentifier()
 result = identifier.identify_issues_and_flags("https://github.com/owner/repo")
 
 # Process results
-print(f"Health Score: {100 - result['total_issues'] * 5}")
-print(f"Issues Found: {result['total_issues']}")
-print(f"Flags Found: {result['total_flags']}")
+for issue in result['issues']:
+    if issue['severity'] == 'high':
+        print(f"Critical issue: {issue['title']}")
+
+for flag in result['flags']:
+    if flag['type'] == 'workflow_failure':
+        print(f"Workflow failed: {flag['message']}")
 ```
 
-### Command Line
+## Limitations
 
-```bash
-# Analyze any public repository
-python Identifier/test_identifier.py https://github.com/microsoft/vscode
+- Rate limited by GitHub API (60 requests/hour without token)
+- Security analysis requires GitHub token with appropriate permissions
+- Analysis is based on publicly available information
+- Some advanced features require specific repository permissions
 
-# Get JSON output for integration
-python Identifier/test_identifier.py https://github.com/facebook/react json
+## Future Enhancements
 
-# Quick summary
-python Identifier/test_identifier.py https://github.com/torvalds/linux summary
-```
-
-## 🔍 Analysis Types
-
-### Issues Identified
-- **GitHub Issues**: Open issues with severity classification
-- **Dependencies**: Dependency management files and analysis
-- **Code Quality**: Repository size, documentation, structure
-- **Security**: Vulnerabilities and security alerts
-
-### Flags Detected
-- **Workflow Failures**: Failed GitHub Actions
-- **Commit Patterns**: Recent commits suggesting issues
-- **Rate Limiting**: API limit warnings
-- **Security Alerts**: Security-related flags
-
-## 🚀 Future Enhancements
-
-- **Executioner Component**: Sandbox testing of fixes
-- **Rectifier Component**: Production fix application
-- **Machine Learning**: AI-powered issue classification
-- **Automated Fixes**: Self-healing capabilities
-- **Real-time Monitoring**: Continuous analysis
-
-## 📝 License
-
-This project is part of the AI Agents Hackathon at NYU.
+- Integration with Datadog for monitoring data
+- Machine learning-based issue classification
+- Automated fix suggestion generation
+- Integration with CI/CD pipelines
+- Real-time monitoring and alerting
